@@ -5,6 +5,12 @@
 #' @field rule Rules to perform checks, must be functions that
 #' accept a single argument and return a boolean.
 #' @field message The message (warning or error).
+#' @field call Expression or function (as string) that led
+#' to the issue.
+#' @field raiser Function to run when the `raise` method 
+#' is called. By default the error uses `stop()` and warning
+#' uses `warning()`. The function must accept a single argument:
+#' the error message (character vector).
 #' 
 #' @export
 Issue <- R6::R6Class(
@@ -16,7 +22,8 @@ Issue <- R6::R6Class(
 #' class `error`, or `warning`.
 #' @param type Type of message.
     initialize = function(obj, type = c("error", "warning")){
-      private$msg <- extract(obj)
+      private$msg <- get_msg(obj)
+      private$.call <- get_call(obj)
       private$type <- match.arg(type)
     },
 #' @details Print
@@ -49,7 +56,7 @@ Issue <- R6::R6Class(
     check = function(obj){
 
       if(length(private$.rules) == 0)
-        return(e("No `rule` is set"))
+        e("No `rule` is set")$return()
 
       # run checks
       bools <- sapply(private$.rules, function(fn, object){
@@ -69,34 +76,52 @@ Issue <- R6::R6Class(
       self$raise()
     },
 #' @details Raise error or warning
-    raise = function(){
-      if(private$type == "error")
-        stop(self$message, call. = FALSE)
+#' @param fn A function to use to raise the issue.
+    raise = function(fn = NULL){
+      if(!is.null(fn))
+        fn(self$message)
       else
-        warning(self$message, call. = FALSE)
+        private$.raiser(self$message)
     }
   ),
   active = list(
     rule = function(fn){
       if(missing(fn))
-        return(e("This field is read-only"))
+        e("Missing rule")$raise()
 
       if(!is.function(fn))
-        return(invisible())
+        e("Must pass a function")$raise()
 
       private$.rules <- append(private$.rules, fn)
     },
     message = function(msg){
       if(!missing(msg))
-        return(e("This field is read-only"))
+        e("This field is read-only")$raise()
 
       private$msg
+    },
+    call = function(call){
+      if(!missing(call))
+        e("This field is read-only")$raise()
+
+      private$.call
+    },
+    raiser = function(fn){
+      if(missing(fn))
+        e("Missing function")$raise()
+
+      if(!is.function(fn))
+        e("Must pass a function")$raise()
+
+      private$.raiser <- fn
     }
   ),
   private = list(
     msg = "",
     type = "error",
-    .rules = list()
+    .call = NA,
+    .rules = list(),
+    .raiser = NULL
   )
 )
 
@@ -122,11 +147,19 @@ Issue <- R6::R6Class(
 #' @name ew
 #' @export 
 e <- function(obj){
-  Error$new(obj, "error")
+  if(is.character(obj))
+    obj <- simpleError(
+      obj, as.character(sys.call(sys.parent(1)))[1L]
+    )
+  Error$new(obj)
 }
 
 #' @rdname ew
 #' @export 
 w <- function(obj){
-  Warning$new(obj, "warning")
+  if(is.character(obj))
+    obj <- simpleWarning(
+      obj, as.character(sys.call(sys.parent(1)))[1L]
+    )
+  Warning$new(obj)
 }
