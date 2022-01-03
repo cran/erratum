@@ -1,4 +1,10 @@
-# erratum 2.1.0.9000
+# erratum 2.2.0
+
+- Renamed `jab` to `bash`
+- Remove deprecated `enforce`
+- Add tests
+
+# erratum 2.1.0
 
 - Deprecate `enforce` in favour of `resolve`, much easier to memorise
 - Ability to retrieve the call wherefrom the issue originates (from the `call` field)
